@@ -232,6 +232,22 @@ const HTML = `<!DOCTYPE html>
     .copy-btn:hover { background: #e8f0fe; }
     .copy-btn.copied { color: #137333; border-color: #137333; }
 
+    .play-btn {
+      padding: 8px 16px;
+      border: 1px solid #dadce0;
+      border-radius: 20px;
+      background: #fff;
+      font-size: 13px;
+      font-family: inherit;
+      color: #0077b5;
+      cursor: pointer;
+      transition: background 0.15s;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .play-btn:hover:not(:disabled) { background: #e8f0fe; }
+    .play-btn.playing { color: #c5221f; border-color: #c5221f; }
+    .play-btn:disabled { color: #bdc1c6; border-color: #dadce0; cursor: not-allowed; }
+
     .best-badge {
       display: flex; align-items: center; gap: 4px;
       padding: 8px 16px;
@@ -406,6 +422,10 @@ const HTML = `<!DOCTYPE html>
 
     <div class="panel-footer">
       <span class="char-count" id="charCount">0 / 5000</span>
+      <button class="play-btn" id="inputPlayBtn" title="Listen" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        Listen
+      </button>
       <button class="translate-btn" id="translateBtn" disabled>Translate</button>
     </div>
   </div>
@@ -426,6 +446,10 @@ const HTML = `<!DOCTYPE html>
         Best
         <svg width="16" height="16" viewBox="0 0 24 24" fill="#8430ce" stroke="none"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
       </div>
+      <button class="play-btn" id="outputPlayBtn" style="display:none;" title="Listen">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        Listen
+      </button>
       <button class="copy-btn" id="copyBtn" style="display:none;">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         Copy
@@ -458,9 +482,77 @@ const HTML = `<!DOCTYPE html>
   const charCount = document.getElementById('charCount');
   const errorBanner = document.getElementById('errorBanner');
   const toneChips = document.querySelectorAll('.tone-chip');
+  const inputPlayBtn = document.getElementById('inputPlayBtn');
+  const outputPlayBtn = document.getElementById('outputPlayBtn');
 
   let activeTone = 'motivational';
   let translating = false;
+  let currentAudio = null;
+  let currentPlayBtn = null;
+
+  const SPEAKER_SVG = \`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>\`;
+  const STOP_SVG = \`<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>\`;
+
+  function resetPlayBtn(btn) {
+    if (!btn) return;
+    btn.innerHTML = SPEAKER_SVG + ' Listen';
+    btn.classList.remove('playing');
+    btn.disabled = false;
+  }
+
+  async function playTTS(text, btn) {
+    // Toggle off if already playing this button
+    if (currentAudio && currentPlayBtn === btn) {
+      currentAudio.pause();
+      currentAudio = null;
+      resetPlayBtn(btn);
+      currentPlayBtn = null;
+      return;
+    }
+    // Stop any other playing audio
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio = null;
+      resetPlayBtn(currentPlayBtn);
+      currentPlayBtn = null;
+    }
+    btn.innerHTML = \`<div class="spinner" style="width:14px;height:14px;border-width:2px;flex-shrink:0"></div> Loading...\`;
+    btn.disabled = true;
+    try {
+      const res = await fetch('/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.audioContent) throw new Error(data.error || 'TTS unavailable');
+      const audio = new Audio(\`data:\${data.mimeType || 'audio/wav'};base64,\${data.audioContent}\`);
+      currentAudio = audio;
+      currentPlayBtn = btn;
+      btn.innerHTML = STOP_SVG + ' Stop';
+      btn.classList.add('playing');
+      btn.disabled = false;
+      audio.addEventListener('ended', () => {
+        resetPlayBtn(btn);
+        currentAudio = null;
+        currentPlayBtn = null;
+      });
+      audio.play();
+    } catch (err) {
+      resetPlayBtn(btn);
+      console.error('TTS error:', err.message);
+    }
+  }
+
+  inputPlayBtn.addEventListener('click', () => {
+    const text = inputEl.value.trim();
+    if (text) playTTS(text, inputPlayBtn);
+  });
+
+  outputPlayBtn.addEventListener('click', () => {
+    const text = outputEl.textContent;
+    if (text && !outputEl.classList.contains('placeholder')) playTTS(text, outputPlayBtn);
+  });
 
   // Tone selection
   toneChips.forEach(chip => {
@@ -476,6 +568,7 @@ const HTML = `<!DOCTYPE html>
     const len = inputEl.value.length;
     charCount.textContent = len + ' / 5000';
     translateBtn.disabled = len === 0 || translating;
+    inputPlayBtn.disabled = len === 0;
   });
 
   // Translate on Ctrl/Cmd+Enter
@@ -491,8 +584,12 @@ const HTML = `<!DOCTYPE html>
     inputEl.value = '';
     charCount.textContent = '0 / 5000';
     translateBtn.disabled = true;
+    inputPlayBtn.disabled = true;
+    if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+    resetPlayBtn(currentPlayBtn); currentPlayBtn = null;
     setOutput('placeholder', 'Translation');
     copyBtn.style.display = 'none';
+    outputPlayBtn.style.display = 'none';
     hideError();
   });
 
@@ -530,6 +627,11 @@ const HTML = `<!DOCTYPE html>
     outputEl.className = 'output-text ' + (type === 'placeholder' ? 'placeholder' : type === 'loading' ? 'loading' : '');
     if (type === 'loading') {
       outputEl.innerHTML = \`<div class="spinner"></div> Translating to LinkedIn speak...\`;
+      outputPlayBtn.style.display = 'none';
+      if (currentAudio && currentPlayBtn === outputPlayBtn) {
+        currentAudio.pause(); currentAudio = null;
+        resetPlayBtn(outputPlayBtn); currentPlayBtn = null;
+      }
     } else {
       outputEl.textContent = text;
     }
@@ -568,6 +670,7 @@ const HTML = `<!DOCTYPE html>
 
       setOutput('result', data.result);
       copyBtn.style.display = 'flex';
+      outputPlayBtn.style.display = 'flex';
     } catch (err) {
       setOutput('placeholder', 'Translation');
       showError(err.message || 'Something went wrong. Please try again.');
@@ -580,14 +683,56 @@ const HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
+// WAV header utilities for Gemini TTS raw PCM output
+function parseTtsMimeType(mimeType) {
+  const [fileType, ...params] = mimeType.split(';').map(s => s.trim());
+  const format = fileType.split('/')[1] || '';
+  const opts = { numChannels: 1, sampleRate: 24000, bitsPerSample: 16 };
+  if (format.startsWith('L')) {
+    const bits = parseInt(format.slice(1), 10);
+    if (!isNaN(bits)) opts.bitsPerSample = bits;
+  }
+  for (const param of params) {
+    const [key, value] = param.split('=');
+    if (key?.trim() === 'rate') opts.sampleRate = parseInt(value?.trim(), 10);
+  }
+  return opts;
+}
+
+function createWavHeader(dataLength, { sampleRate, numChannels, bitsPerSample }) {
+  const buf = new ArrayBuffer(44);
+  const v = new DataView(buf);
+  const s = (off, str) => [...str].forEach((c, i) => v.setUint8(off + i, c.charCodeAt(0)));
+  const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+  s(0, 'RIFF'); v.setUint32(4, 36 + dataLength, true);
+  s(8, 'WAVE'); s(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, numChannels, true); v.setUint32(24, sampleRate, true);
+  v.setUint32(28, byteRate, true); v.setUint16(32, numChannels * bitsPerSample / 8, true);
+  v.setUint16(34, bitsPerSample, true);
+  s(36, 'data'); v.setUint32(40, dataLength, true);
+  return new Uint8Array(buf);
+}
+
+function wrapInWav(base64Data, mimeType) {
+  const opts = parseTtsMimeType(mimeType);
+  const raw = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+  const header = createWavHeader(raw.length, opts);
+  const out = new Uint8Array(header.length + raw.length);
+  out.set(header); out.set(raw, header.length);
+  let binary = '';
+  out.forEach(b => binary += String.fromCharCode(b));
+  return btoa(binary);
+}
+
 // Gemini API call
 async function callGemini(apiKey, text, tone) {
   const tonePrompts = {
-    'motivational': `Transform the following text into an over-the-top motivational LinkedIn post. Use corporate buzzwords, talk about personal growth, hustle, grinding, and lessons learned. End with 3-5 relevant hashtags. Be dramatic and inspirational. Make it sound like every mundane action is a profound life lesson.`,
-    'humble-brag': `Transform the following text into a LinkedIn humble-brag post. Act like you're being modest but clearly show off. Reference your accomplishments, your network, or how busy and important you are. End with 3-5 hashtags. Be subtly self-congratulatory.`,
-    'thought-leader': `Transform the following text into a LinkedIn thought leadership post. Make it sound like deep wisdom about business, life, or the future of work. Use phrases like "unpopular opinion:", "here's what most people don't understand:", or "after X years in the industry". End with 3-5 hashtags.`,
-    'inspirational': `Transform the following text into a long-form LinkedIn inspirational story. Add emotional beats, a backstory about struggle, and a triumphant conclusion with a lesson. Make it sound like a TED talk. End with 3-5 hashtags and a call to action asking people to share or comment.`,
-    'corporate': `Transform the following text into dense corporate jargon LinkedIn speak. Use as many business buzzwords as possible: synergize, leverage, pivot, disruption, scalable, ROI, bandwidth, circle back, move the needle, low-hanging fruit, etc. End with 3-5 hashtags.`,
+    'motivational': `Transform the following text into a short motivational LinkedIn post — 3 to 5 sentences. Write it exactly like a real LinkedIn post: sincere, self-aware, full of personal growth language and hustle-culture buzzwords. It should read as completely genuine — the comedy comes from the fact that it sounds like something a real person would actually post. End with 2-3 relevant hashtags.`,
+    'humble-brag': `Transform the following text into a short LinkedIn humble-brag — 3 to 5 sentences. Write it exactly like a real LinkedIn post: earnest and self-effacing on the surface, but unmistakably self-promotional underneath. It should sound like something a real person would genuinely post without realising how it comes across. End with 2-3 relevant hashtags.`,
+    'thought-leader': `Transform the following text into a short LinkedIn thought leadership post — 3 to 5 sentences. Write it exactly like a real LinkedIn post: open with a bold statement or "Unpopular opinion:", then deliver the insight with total sincerity. It should sound like genuine wisdom someone is proud to share publicly. End with 2-3 relevant hashtags.`,
+    'inspirational': `Transform the following text into a short LinkedIn inspirational story — 4 to 6 sentences. Write it exactly like a real LinkedIn post: a brief personal struggle, a turning point, and a lesson for your network. It should feel completely authentic — the kind of post that gets hundreds of "This!" comments. End with 2-3 relevant hashtags.`,
+    'corporate': `Transform the following text into a short corporate LinkedIn post — 3 to 5 sentences. Write it exactly like a real LinkedIn post from a business professional: confident, buzzword-rich, and utterly earnest. Leverage synergies, move needles, circle back. It should read as something a real person in a suit would post and feel proud of. End with 2-3 relevant hashtags.`,
   };
 
   const systemPrompt = tonePrompts[tone] || tonePrompts['motivational'];
@@ -609,7 +754,7 @@ async function callGemini(apiKey, text, tone) {
         ],
         generationConfig: {
           temperature: 1.2,
-          maxOutputTokens: 512,
+          maxOutputTokens: 200,
         },
         safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
@@ -657,6 +802,54 @@ export default {
 
         const result = await callGemini(apiKey, text, tone);
         return Response.json({ result });
+      } catch (err) {
+        return Response.json({ error: err.message }, { status: 500 });
+      }
+    }
+
+    // Serve TTS API (Gemini 2.5 Pro TTS, Leda voice)
+    if (url.pathname === '/tts' && request.method === 'POST') {
+      try {
+        const apiKey = env.GEMINI_API_KEY;
+        if (!apiKey) {
+          return Response.json({ error: 'GEMINI_API_KEY secret is not configured.' }, { status: 500 });
+        }
+        const body = await request.json();
+        const text = (body.text || '').trim().slice(0, 3000);
+        if (!text) return Response.json({ error: 'No text provided' }, { status: 400 });
+
+        const ttsRes = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-tts:generateContent?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: `Read aloud in a warm and friendly tone: ${text}` }] }],
+              generationConfig: {
+                temperature: 1,
+                responseModalities: ['audio'],
+                speechConfig: {
+                  voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Leda' } },
+                },
+              },
+            }),
+          }
+        );
+        if (!ttsRes.ok) {
+          const err = await ttsRes.json().catch(() => ({}));
+          throw new Error(err?.error?.message || `Gemini TTS error: ${ttsRes.status}`);
+        }
+        const json = await ttsRes.json();
+        const part = json?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+        if (!part) throw new Error('No audio in Gemini TTS response');
+
+        const mimeType = part.mimeType || '';
+        // Gemini returns raw PCM (audio/L16) — wrap in WAV header for browser playback
+        const isRawPcm = !mimeType.includes('wav') && !mimeType.includes('mp3') && !mimeType.includes('ogg');
+        const audioContent = isRawPcm ? wrapInWav(part.data, mimeType) : part.data;
+        const audioMime = mimeType.includes('mp3') ? 'audio/mp3' : 'audio/wav';
+
+        return Response.json({ audioContent, mimeType: audioMime });
       } catch (err) {
         return Response.json({ error: err.message }, { status: 500 });
       }
