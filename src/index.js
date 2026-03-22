@@ -351,10 +351,47 @@ const HTML = `<!DOCTYPE html>
 
     /* Responsive */
     @media (max-width: 768px) {
-      .translator { grid-template-columns: 1fr; }
-      textarea { font-size: 18px; }
-      .output-text { font-size: 18px; }
+      header { padding: 0 12px; height: 52px; }
       .header-title { font-size: 18px; }
+
+      .lang-bar { padding: 0 12px; }
+      .lang-btn { padding: 0 12px; font-size: 13px; }
+      .swap-btn { margin: 0 6px; }
+
+      .section-label { padding: 4px 12px 0; }
+
+      .tone-selector {
+        padding: 8px 12px;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+        flex-wrap: nowrap;
+      }
+      .tone-selector::-webkit-scrollbar { display: none; }
+      .tone-chip { white-space: nowrap; flex-shrink: 0; }
+
+      .translator {
+        grid-template-columns: 1fr;
+        margin: 12px auto;
+        padding: 0 12px;
+        gap: 10px;
+      }
+      .panel { min-height: 200px; }
+
+      textarea { font-size: 18px; min-height: 120px; }
+      .output-text { font-size: 18px; min-height: 120px; }
+
+      .panel-footer { padding: 8px 8px; gap: 6px; flex-wrap: wrap; }
+      .char-count { font-size: 11px; }
+
+      /* Hide "Listen" label on mobile — icon only */
+      .play-btn .play-label { display: none; }
+      .play-btn { padding: 8px 10px; }
+
+      .best-badge { padding: 8px 10px; margin-right: 0; }
+      .copy-btn { padding: 8px 12px; }
+
+      .examples { padding: 0 12px 20px; }
     }
   </style>
 </head>
@@ -424,7 +461,7 @@ const HTML = `<!DOCTYPE html>
       <span class="char-count" id="charCount">0 / 5000</span>
       <button class="play-btn" id="inputPlayBtn" title="Listen" disabled>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-        Listen
+        <span class="play-label">Listen</span>
       </button>
       <button class="translate-btn" id="translateBtn" disabled>Translate</button>
     </div>
@@ -448,7 +485,7 @@ const HTML = `<!DOCTYPE html>
       </div>
       <button class="play-btn" id="outputPlayBtn" style="display:none;" title="Listen">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-        Listen
+        <span class="play-label">Listen</span>
       </button>
       <button class="copy-btn" id="copyBtn" style="display:none;">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -495,7 +532,7 @@ const HTML = `<!DOCTYPE html>
 
   function resetPlayBtn(btn) {
     if (!btn) return;
-    btn.innerHTML = SPEAKER_SVG + ' Listen';
+    btn.innerHTML = SPEAKER_SVG + \`<span class="play-label">Listen</span>\`;
     btn.classList.remove('playing');
     btn.disabled = false;
   }
@@ -529,7 +566,7 @@ const HTML = `<!DOCTYPE html>
       const audio = new Audio(\`data:\${data.mimeType || 'audio/wav'};base64,\${data.audioContent}\`);
       currentAudio = audio;
       currentPlayBtn = btn;
-      btn.innerHTML = STOP_SVG + ' Stop';
+      btn.innerHTML = STOP_SVG + \`<span class="play-label">Stop</span>\`;
       btn.classList.add('playing');
       btn.disabled = false;
       audio.addEventListener('ended', () => {
