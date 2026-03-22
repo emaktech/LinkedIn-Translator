@@ -232,6 +232,22 @@ const HTML = `<!DOCTYPE html>
     .copy-btn:hover { background: #e8f0fe; }
     .copy-btn.copied { color: #137333; border-color: #137333; }
 
+    .play-btn {
+      padding: 8px 16px;
+      border: 1px solid #dadce0;
+      border-radius: 20px;
+      background: #fff;
+      font-size: 13px;
+      font-family: inherit;
+      color: #0077b5;
+      cursor: pointer;
+      transition: background 0.15s;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .play-btn:hover:not(:disabled) { background: #e8f0fe; }
+    .play-btn.playing { color: #c5221f; border-color: #c5221f; }
+    .play-btn:disabled { color: #bdc1c6; border-color: #dadce0; cursor: not-allowed; }
+
     .best-badge {
       display: flex; align-items: center; gap: 4px;
       padding: 8px 16px;
@@ -406,6 +422,10 @@ const HTML = `<!DOCTYPE html>
 
     <div class="panel-footer">
       <span class="char-count" id="charCount">0 / 5000</span>
+      <button class="play-btn" id="inputPlayBtn" title="Listen" disabled>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        Listen
+      </button>
       <button class="translate-btn" id="translateBtn" disabled>Translate</button>
     </div>
   </div>
@@ -426,6 +446,10 @@ const HTML = `<!DOCTYPE html>
         Best
         <svg width="16" height="16" viewBox="0 0 24 24" fill="#8430ce" stroke="none"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
       </div>
+      <button class="play-btn" id="outputPlayBtn" style="display:none;" title="Listen">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+        Listen
+      </button>
       <button class="copy-btn" id="copyBtn" style="display:none;">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
         Copy
@@ -458,9 +482,77 @@ const HTML = `<!DOCTYPE html>
   const charCount = document.getElementById('charCount');
   const errorBanner = document.getElementById('errorBanner');
   const toneChips = document.querySelectorAll('.tone-chip');
+  const inputPlayBtn = document.getElementById('inputPlayBtn');
+  const outputPlayBtn = document.getElementById('outputPlayBtn');
 
   let activeTone = 'motivational';
   let translating = false;
+  let currentAudio = null;
+  let currentPlayBtn = null;
+
+  const SPEAKER_SVG = \`<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>\`;
+  const STOP_SVG = \`<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="4" y="4" width="16" height="16" rx="2"/></svg>\`;
+
+  function resetPlayBtn(btn) {
+    if (!btn) return;
+    btn.innerHTML = SPEAKER_SVG + ' Listen';
+    btn.classList.remove('playing');
+    btn.disabled = false;
+  }
+
+  async function playTTS(text, btn) {
+    // Toggle off if already playing this button
+    if (currentAudio && currentPlayBtn === btn) {
+      currentAudio.pause();
+      currentAudio = null;
+      resetPlayBtn(btn);
+      currentPlayBtn = null;
+      return;
+    }
+    // Stop any other playing audio
+    if (currentAudio) {
+      currentAudio.pause();
+      currentAudio = null;
+      resetPlayBtn(currentPlayBtn);
+      currentPlayBtn = null;
+    }
+    btn.innerHTML = \`<div class="spinner" style="width:14px;height:14px;border-width:2px;flex-shrink:0"></div> Loading...\`;
+    btn.disabled = true;
+    try {
+      const res = await fetch('/tts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text }),
+      });
+      const data = await res.json();
+      if (!res.ok || !data.audioContent) throw new Error(data.error || 'TTS unavailable');
+      const audio = new Audio('data:audio/mp3;base64,' + data.audioContent);
+      currentAudio = audio;
+      currentPlayBtn = btn;
+      btn.innerHTML = STOP_SVG + ' Stop';
+      btn.classList.add('playing');
+      btn.disabled = false;
+      audio.addEventListener('ended', () => {
+        resetPlayBtn(btn);
+        currentAudio = null;
+        currentPlayBtn = null;
+      });
+      audio.play();
+    } catch (err) {
+      resetPlayBtn(btn);
+      console.error('TTS error:', err.message);
+    }
+  }
+
+  inputPlayBtn.addEventListener('click', () => {
+    const text = inputEl.value.trim();
+    if (text) playTTS(text, inputPlayBtn);
+  });
+
+  outputPlayBtn.addEventListener('click', () => {
+    const text = outputEl.textContent;
+    if (text && !outputEl.classList.contains('placeholder')) playTTS(text, outputPlayBtn);
+  });
 
   // Tone selection
   toneChips.forEach(chip => {
@@ -476,6 +568,7 @@ const HTML = `<!DOCTYPE html>
     const len = inputEl.value.length;
     charCount.textContent = len + ' / 5000';
     translateBtn.disabled = len === 0 || translating;
+    inputPlayBtn.disabled = len === 0;
   });
 
   // Translate on Ctrl/Cmd+Enter
@@ -491,8 +584,12 @@ const HTML = `<!DOCTYPE html>
     inputEl.value = '';
     charCount.textContent = '0 / 5000';
     translateBtn.disabled = true;
+    inputPlayBtn.disabled = true;
+    if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+    resetPlayBtn(currentPlayBtn); currentPlayBtn = null;
     setOutput('placeholder', 'Translation');
     copyBtn.style.display = 'none';
+    outputPlayBtn.style.display = 'none';
     hideError();
   });
 
@@ -530,6 +627,11 @@ const HTML = `<!DOCTYPE html>
     outputEl.className = 'output-text ' + (type === 'placeholder' ? 'placeholder' : type === 'loading' ? 'loading' : '');
     if (type === 'loading') {
       outputEl.innerHTML = \`<div class="spinner"></div> Translating to LinkedIn speak...\`;
+      outputPlayBtn.style.display = 'none';
+      if (currentAudio && currentPlayBtn === outputPlayBtn) {
+        currentAudio.pause(); currentAudio = null;
+        resetPlayBtn(outputPlayBtn); currentPlayBtn = null;
+      }
     } else {
       outputEl.textContent = text;
     }
@@ -568,6 +670,7 @@ const HTML = `<!DOCTYPE html>
 
       setOutput('result', data.result);
       copyBtn.style.display = 'flex';
+      outputPlayBtn.style.display = 'flex';
     } catch (err) {
       setOutput('placeholder', 'Translation');
       showError(err.message || 'Something went wrong. Please try again.');
@@ -657,6 +760,40 @@ export default {
 
         const result = await callGemini(apiKey, text, tone);
         return Response.json({ result });
+      } catch (err) {
+        return Response.json({ error: err.message }, { status: 500 });
+      }
+    }
+
+    // Serve TTS API (Google Cloud Text-to-Speech, Journey voice)
+    if (url.pathname === '/tts' && request.method === 'POST') {
+      try {
+        const apiKey = env.GOOGLE_TTS_API_KEY || env.GEMINI_API_KEY;
+        if (!apiKey) {
+          return Response.json({ error: 'No TTS API key configured. Set GOOGLE_TTS_API_KEY secret.' }, { status: 500 });
+        }
+        const body = await request.json();
+        const text = (body.text || '').trim().slice(0, 3000);
+        if (!text) return Response.json({ error: 'No text provided' }, { status: 400 });
+
+        const ttsRes = await fetch(
+          `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              input: { text },
+              voice: { languageCode: 'en-US', name: 'en-US-Journey-F' },
+              audioConfig: { audioEncoding: 'MP3' },
+            }),
+          }
+        );
+        if (!ttsRes.ok) {
+          const err = await ttsRes.json().catch(() => ({}));
+          throw new Error(err?.error?.message || `TTS API error: ${ttsRes.status}`);
+        }
+        const json = await ttsRes.json();
+        return Response.json({ audioContent: json.audioContent });
       } catch (err) {
         return Response.json({ error: err.message }, { status: 500 });
       }
