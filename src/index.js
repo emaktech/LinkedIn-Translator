@@ -351,10 +351,47 @@ const HTML = `<!DOCTYPE html>
 
     /* Responsive */
     @media (max-width: 768px) {
-      .translator { grid-template-columns: 1fr; }
-      textarea { font-size: 18px; }
-      .output-text { font-size: 18px; }
+      header { padding: 0 12px; height: 52px; }
       .header-title { font-size: 18px; }
+
+      .lang-bar { padding: 0 12px; }
+      .lang-btn { padding: 0 12px; font-size: 13px; }
+      .swap-btn { margin: 0 6px; }
+
+      .section-label { padding: 4px 12px 0; }
+
+      .tone-selector {
+        padding: 8px 12px;
+        overflow-x: auto;
+        scrollbar-width: none;
+        -webkit-overflow-scrolling: touch;
+        flex-wrap: nowrap;
+      }
+      .tone-selector::-webkit-scrollbar { display: none; }
+      .tone-chip { white-space: nowrap; flex-shrink: 0; }
+
+      .translator {
+        grid-template-columns: 1fr;
+        margin: 12px auto;
+        padding: 0 12px;
+        gap: 10px;
+      }
+      .panel { min-height: 200px; }
+
+      textarea { font-size: 18px; min-height: 120px; }
+      .output-text { font-size: 18px; min-height: 120px; }
+
+      .panel-footer { padding: 8px 8px; gap: 6px; flex-wrap: wrap; }
+      .char-count { font-size: 11px; }
+
+      /* Hide "Listen" label on mobile — icon only */
+      .play-btn .play-label { display: none; }
+      .play-btn { padding: 8px 10px; }
+
+      .best-badge { padding: 8px 10px; margin-right: 0; }
+      .copy-btn { padding: 8px 12px; }
+
+      .examples { padding: 0 12px 20px; }
     }
   </style>
 </head>
@@ -424,7 +461,7 @@ const HTML = `<!DOCTYPE html>
       <span class="char-count" id="charCount">0 / 5000</span>
       <button class="play-btn" id="inputPlayBtn" title="Listen" disabled>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-        Listen
+        <span class="play-label">Listen</span>
       </button>
       <button class="translate-btn" id="translateBtn" disabled>Translate</button>
     </div>
@@ -448,7 +485,7 @@ const HTML = `<!DOCTYPE html>
       </div>
       <button class="play-btn" id="outputPlayBtn" style="display:none;" title="Listen">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
-        Listen
+        <span class="play-label">Listen</span>
       </button>
       <button class="copy-btn" id="copyBtn" style="display:none;">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -495,7 +532,7 @@ const HTML = `<!DOCTYPE html>
 
   function resetPlayBtn(btn) {
     if (!btn) return;
-    btn.innerHTML = SPEAKER_SVG + ' Listen';
+    btn.innerHTML = SPEAKER_SVG + \`<span class="play-label">Listen</span>\`;
     btn.classList.remove('playing');
     btn.disabled = false;
   }
@@ -529,7 +566,7 @@ const HTML = `<!DOCTYPE html>
       const audio = new Audio(\`data:\${data.mimeType || 'audio/wav'};base64,\${data.audioContent}\`);
       currentAudio = audio;
       currentPlayBtn = btn;
-      btn.innerHTML = STOP_SVG + ' Stop';
+      btn.innerHTML = STOP_SVG + \`<span class="play-label">Stop</span>\`;
       btn.classList.add('playing');
       btn.disabled = false;
       audio.addEventListener('ended', () => {
@@ -728,11 +765,25 @@ function wrapInWav(base64Data, mimeType) {
 // Gemini API call
 async function callGemini(apiKey, text, tone) {
   const tonePrompts = {
-    'motivational': `Transform the following text into a short motivational LinkedIn post — 3 to 5 sentences. Write it exactly like a real LinkedIn post: sincere, self-aware, full of personal growth language and hustle-culture buzzwords. It should read as completely genuine — the comedy comes from the fact that it sounds like something a real person would actually post. End with 2-3 relevant hashtags.`,
-    'humble-brag': `Transform the following text into a short LinkedIn humble-brag — 3 to 5 sentences. Write it exactly like a real LinkedIn post: earnest and self-effacing on the surface, but unmistakably self-promotional underneath. It should sound like something a real person would genuinely post without realising how it comes across. End with 2-3 relevant hashtags.`,
-    'thought-leader': `Transform the following text into a short LinkedIn thought leadership post — 3 to 5 sentences. Write it exactly like a real LinkedIn post: open with a bold statement or "Unpopular opinion:", then deliver the insight with total sincerity. It should sound like genuine wisdom someone is proud to share publicly. End with 2-3 relevant hashtags.`,
-    'inspirational': `Transform the following text into a short LinkedIn inspirational story — 4 to 6 sentences. Write it exactly like a real LinkedIn post: a brief personal struggle, a turning point, and a lesson for your network. It should feel completely authentic — the kind of post that gets hundreds of "This!" comments. End with 2-3 relevant hashtags.`,
-    'corporate': `Transform the following text into a short corporate LinkedIn post — 3 to 5 sentences. Write it exactly like a real LinkedIn post from a business professional: confident, buzzword-rich, and utterly earnest. Leverage synergies, move needles, circle back. It should read as something a real person in a suit would post and feel proud of. End with 2-3 relevant hashtags.`,
+    'motivational': `You are a LinkedIn ghostwriter. Translate the following text into a short motivational LinkedIn post (3–5 sentences + 2–3 hashtags).
+
+The key rule: choose business and productivity metaphors that, taken literally, accurately describe exactly what the original text is about — but read as completely sincere corporate content to anyone who doesn't know the source. The comedy is purely in the double meaning. Never reference the original topic directly. Write with total earnestness, as if this is a genuine post someone is proud of.`,
+
+    'humble-brag': `You are a LinkedIn ghostwriter. Translate the following text into a short humble-brag LinkedIn post (3–5 sentences + 2–3 hashtags).
+
+The key rule: choose modest, self-effacing business language that, taken literally, accurately describes exactly what the original text is about — but reads as genuine LinkedIn humility to anyone who doesn't know the source. The comedy is purely in the double meaning. Never reference the original topic directly. Write with total sincerity.`,
+
+    'thought-leader': `You are a LinkedIn ghostwriter. Translate the following text into a short thought leadership LinkedIn post (3–5 sentences + 2–3 hashtags). Open with "Unpopular opinion:" or a bold statement.
+
+The key rule: frame the original event as a business insight or industry truth using metaphors that, taken literally, accurately describe exactly what the original text is about — but sound like genuine professional wisdom to anyone who doesn't know the source. The comedy is purely in the double meaning. Never reference the original topic directly. Write with total conviction.`,
+
+    'inspirational': `You are a LinkedIn ghostwriter. Translate the following text into a short inspirational LinkedIn story (4–6 sentences + 2–3 hashtags).
+
+The key rule: frame the original event as a personal growth moment using language that, taken literally, accurately describes exactly what the original text is about — but reads as an authentic human story to anyone who doesn't know the source. The comedy is purely in the double meaning. Never reference the original topic directly. Write with genuine warmth and vulnerability.`,
+
+    'corporate': `You are a LinkedIn ghostwriter. Translate the following text into a short corporate update LinkedIn post (3–5 sentences + 2–3 hashtags).
+
+The key rule: use business operations language — process, output, delivery, capacity, throughput, pipeline — that, taken literally, accurately describes exactly what the original text is about — but reads as a routine professional update to anyone who doesn't know the source. The comedy is purely in the double meaning. Never reference the original topic directly. Write with bland professional confidence.`,
   };
 
   const systemPrompt = tonePrompts[tone] || tonePrompts['motivational'];
