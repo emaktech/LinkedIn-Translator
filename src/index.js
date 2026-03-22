@@ -728,11 +728,11 @@ function wrapInWav(base64Data, mimeType) {
 // Gemini API call
 async function callGemini(apiKey, text, tone) {
   const tonePrompts = {
-    'motivational': `Transform the following text into an over-the-top motivational LinkedIn post. Use corporate buzzwords, talk about personal growth, hustle, grinding, and lessons learned. End with 3-5 relevant hashtags. Be dramatic and inspirational. Make it sound like every mundane action is a profound life lesson.`,
-    'humble-brag': `Transform the following text into a LinkedIn humble-brag post. Act like you're being modest but clearly show off. Reference your accomplishments, your network, or how busy and important you are. End with 3-5 hashtags. Be subtly self-congratulatory.`,
-    'thought-leader': `Transform the following text into a LinkedIn thought leadership post. Make it sound like deep wisdom about business, life, or the future of work. Use phrases like "unpopular opinion:", "here's what most people don't understand:", or "after X years in the industry". End with 3-5 hashtags.`,
-    'inspirational': `Transform the following text into a long-form LinkedIn inspirational story. Add emotional beats, a backstory about struggle, and a triumphant conclusion with a lesson. Make it sound like a TED talk. End with 3-5 hashtags and a call to action asking people to share or comment.`,
-    'corporate': `Transform the following text into dense corporate jargon LinkedIn speak. Use as many business buzzwords as possible: synergize, leverage, pivot, disruption, scalable, ROI, bandwidth, circle back, move the needle, low-hanging fruit, etc. End with 3-5 hashtags.`,
+    'motivational': `Transform the following text into a short, punchy motivational LinkedIn post — 3 to 5 sentences max. Pack in corporate buzzwords, hustle culture, and personal growth. Make it hilariously over-the-top as if a mundane act is the key to unlocking your potential. End with 2-3 hashtags.`,
+    'humble-brag': `Transform the following text into a short LinkedIn humble-brag — 3 to 5 sentences max. Drip with false modesty while clearly showing off. Make it cringe-worthily self-congratulatory. End with 2-3 hashtags.`,
+    'thought-leader': `Transform the following text into a short, punchy LinkedIn thought leadership hot take — 3 to 5 sentences max. Open with "Unpopular opinion:" or "Hot take:" and make it sound like profound wisdom. The more absurdly deep it sounds, the better. End with 2-3 hashtags.`,
+    'inspirational': `Transform the following text into a short LinkedIn inspirational story — 4 to 6 sentences max. Include a quick struggle, a pivot moment, and a lesson. Make it melodramatic and slightly absurd. End with 2-3 hashtags.`,
+    'corporate': `Transform the following text into a short burst of dense corporate jargon LinkedIn speak — 3 to 5 sentences max. Cram in buzzwords: synergize, leverage, pivot, bandwidth, move the needle, low-hanging fruit. The more absurd and meaningless it sounds, the better. End with 2-3 hashtags.`,
   };
 
   const systemPrompt = tonePrompts[tone] || tonePrompts['motivational'];
@@ -754,7 +754,7 @@ async function callGemini(apiKey, text, tone) {
         ],
         generationConfig: {
           temperature: 1.2,
-          maxOutputTokens: 512,
+          maxOutputTokens: 200,
         },
         safetySettings: [
           { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
