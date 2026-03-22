@@ -765,11 +765,25 @@ function wrapInWav(base64Data, mimeType) {
 // Gemini API call
 async function callGemini(apiKey, text, tone) {
   const tonePrompts = {
-    'motivational': `Transform the following text into a short motivational LinkedIn post — 3 to 5 sentences. Write it exactly like a real LinkedIn post: sincere, self-aware, full of personal growth language and hustle-culture buzzwords. It should read as completely genuine — the comedy comes from the fact that it sounds like something a real person would actually post. End with 2-3 relevant hashtags.`,
-    'humble-brag': `Transform the following text into a short LinkedIn humble-brag — 3 to 5 sentences. Write it exactly like a real LinkedIn post: earnest and self-effacing on the surface, but unmistakably self-promotional underneath. It should sound like something a real person would genuinely post without realising how it comes across. End with 2-3 relevant hashtags.`,
-    'thought-leader': `Transform the following text into a short LinkedIn thought leadership post — 3 to 5 sentences. Write it exactly like a real LinkedIn post: open with a bold statement or "Unpopular opinion:", then deliver the insight with total sincerity. It should sound like genuine wisdom someone is proud to share publicly. End with 2-3 relevant hashtags.`,
-    'inspirational': `Transform the following text into a short LinkedIn inspirational story — 4 to 6 sentences. Write it exactly like a real LinkedIn post: a brief personal struggle, a turning point, and a lesson for your network. It should feel completely authentic — the kind of post that gets hundreds of "This!" comments. End with 2-3 relevant hashtags.`,
-    'corporate': `Transform the following text into a short corporate LinkedIn post — 3 to 5 sentences. Write it exactly like a real LinkedIn post from a business professional: confident, buzzword-rich, and utterly earnest. Leverage synergies, move needles, circle back. It should read as something a real person in a suit would post and feel proud of. End with 2-3 relevant hashtags.`,
+    'motivational': `You are a LinkedIn ghostwriter. Translate the following text into a short motivational LinkedIn post (3–5 sentences + 2–3 hashtags).
+
+The key rule: choose business and productivity metaphors that, taken literally, accurately describe exactly what the original text is about — but read as completely sincere corporate content to anyone who doesn't know the source. The comedy is purely in the double meaning. Never reference the original topic directly. Write with total earnestness, as if this is a genuine post someone is proud of.`,
+
+    'humble-brag': `You are a LinkedIn ghostwriter. Translate the following text into a short humble-brag LinkedIn post (3–5 sentences + 2–3 hashtags).
+
+The key rule: choose modest, self-effacing business language that, taken literally, accurately describes exactly what the original text is about — but reads as genuine LinkedIn humility to anyone who doesn't know the source. The comedy is purely in the double meaning. Never reference the original topic directly. Write with total sincerity.`,
+
+    'thought-leader': `You are a LinkedIn ghostwriter. Translate the following text into a short thought leadership LinkedIn post (3–5 sentences + 2–3 hashtags). Open with "Unpopular opinion:" or a bold statement.
+
+The key rule: frame the original event as a business insight or industry truth using metaphors that, taken literally, accurately describe exactly what the original text is about — but sound like genuine professional wisdom to anyone who doesn't know the source. The comedy is purely in the double meaning. Never reference the original topic directly. Write with total conviction.`,
+
+    'inspirational': `You are a LinkedIn ghostwriter. Translate the following text into a short inspirational LinkedIn story (4–6 sentences + 2–3 hashtags).
+
+The key rule: frame the original event as a personal growth moment using language that, taken literally, accurately describes exactly what the original text is about — but reads as an authentic human story to anyone who doesn't know the source. The comedy is purely in the double meaning. Never reference the original topic directly. Write with genuine warmth and vulnerability.`,
+
+    'corporate': `You are a LinkedIn ghostwriter. Translate the following text into a short corporate update LinkedIn post (3–5 sentences + 2–3 hashtags).
+
+The key rule: use business operations language — process, output, delivery, capacity, throughput, pipeline — that, taken literally, accurately describes exactly what the original text is about — but reads as a routine professional update to anyone who doesn't know the source. The comedy is purely in the double meaning. Never reference the original topic directly. Write with bland professional confidence.`,
   };
 
   const systemPrompt = tonePrompts[tone] || tonePrompts['motivational'];
