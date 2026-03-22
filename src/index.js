@@ -526,7 +526,7 @@ const HTML = `<!DOCTYPE html>
       });
       const data = await res.json();
       if (!res.ok || !data.audioContent) throw new Error(data.error || 'TTS unavailable');
-      const audio = new Audio('data:audio/mp3;base64,' + data.audioContent);
+      const audio = new Audio(\`data:\${data.mimeType || 'audio/wav'};base64,\${data.audioContent}\`);
       currentAudio = audio;
       currentPlayBtn = btn;
       btn.innerHTML = STOP_SVG + ' Stop';
@@ -683,6 +683,48 @@ const HTML = `<!DOCTYPE html>
 </body>
 </html>`;
 
+// WAV header utilities for Gemini TTS raw PCM output
+function parseTtsMimeType(mimeType) {
+  const [fileType, ...params] = mimeType.split(';').map(s => s.trim());
+  const format = fileType.split('/')[1] || '';
+  const opts = { numChannels: 1, sampleRate: 24000, bitsPerSample: 16 };
+  if (format.startsWith('L')) {
+    const bits = parseInt(format.slice(1), 10);
+    if (!isNaN(bits)) opts.bitsPerSample = bits;
+  }
+  for (const param of params) {
+    const [key, value] = param.split('=');
+    if (key?.trim() === 'rate') opts.sampleRate = parseInt(value?.trim(), 10);
+  }
+  return opts;
+}
+
+function createWavHeader(dataLength, { sampleRate, numChannels, bitsPerSample }) {
+  const buf = new ArrayBuffer(44);
+  const v = new DataView(buf);
+  const s = (off, str) => [...str].forEach((c, i) => v.setUint8(off + i, c.charCodeAt(0)));
+  const byteRate = sampleRate * numChannels * bitsPerSample / 8;
+  s(0, 'RIFF'); v.setUint32(4, 36 + dataLength, true);
+  s(8, 'WAVE'); s(12, 'fmt ');
+  v.setUint32(16, 16, true); v.setUint16(20, 1, true);
+  v.setUint16(22, numChannels, true); v.setUint32(24, sampleRate, true);
+  v.setUint32(28, byteRate, true); v.setUint16(32, numChannels * bitsPerSample / 8, true);
+  v.setUint16(34, bitsPerSample, true);
+  s(36, 'data'); v.setUint32(40, dataLength, true);
+  return new Uint8Array(buf);
+}
+
+function wrapInWav(base64Data, mimeType) {
+  const opts = parseTtsMimeType(mimeType);
+  const raw = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+  const header = createWavHeader(raw.length, opts);
+  const out = new Uint8Array(header.length + raw.length);
+  out.set(header); out.set(raw, header.length);
+  let binary = '';
+  out.forEach(b => binary += String.fromCharCode(b));
+  return btoa(binary);
+}
+
 // Gemini API call
 async function callGemini(apiKey, text, tone) {
   const tonePrompts = {
@@ -765,35 +807,49 @@ export default {
       }
     }
 
-    // Serve TTS API (Google Cloud Text-to-Speech, Journey voice)
+    // Serve TTS API (Gemini 2.5 Pro TTS, Leda voice)
     if (url.pathname === '/tts' && request.method === 'POST') {
       try {
-        const apiKey = env.GOOGLE_TTS_API_KEY || env.GEMINI_API_KEY;
+        const apiKey = env.GEMINI_API_KEY;
         if (!apiKey) {
-          return Response.json({ error: 'No TTS API key configured. Set GOOGLE_TTS_API_KEY secret.' }, { status: 500 });
+          return Response.json({ error: 'GEMINI_API_KEY secret is not configured.' }, { status: 500 });
         }
         const body = await request.json();
         const text = (body.text || '').trim().slice(0, 3000);
         if (!text) return Response.json({ error: 'No text provided' }, { status: 400 });
 
         const ttsRes = await fetch(
-          `https://texttospeech.googleapis.com/v1/text:synthesize?key=${apiKey}`,
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-tts:generateContent?key=${apiKey}`,
           {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              input: { text },
-              voice: { languageCode: 'en-US', name: 'en-US-Journey-F' },
-              audioConfig: { audioEncoding: 'MP3' },
+              contents: [{ role: 'user', parts: [{ text: `Read aloud in a warm and friendly tone: ${text}` }] }],
+              generationConfig: {
+                temperature: 1,
+                responseModalities: ['audio'],
+                speechConfig: {
+                  voiceConfig: { prebuiltVoiceConfig: { voiceName: 'Leda' } },
+                },
+              },
             }),
           }
         );
         if (!ttsRes.ok) {
           const err = await ttsRes.json().catch(() => ({}));
-          throw new Error(err?.error?.message || `TTS API error: ${ttsRes.status}`);
+          throw new Error(err?.error?.message || `Gemini TTS error: ${ttsRes.status}`);
         }
         const json = await ttsRes.json();
-        return Response.json({ audioContent: json.audioContent });
+        const part = json?.candidates?.[0]?.content?.parts?.[0]?.inlineData;
+        if (!part) throw new Error('No audio in Gemini TTS response');
+
+        const mimeType = part.mimeType || '';
+        // Gemini returns raw PCM (audio/L16) — wrap in WAV header for browser playback
+        const isRawPcm = !mimeType.includes('wav') && !mimeType.includes('mp3') && !mimeType.includes('ogg');
+        const audioContent = isRawPcm ? wrapInWav(part.data, mimeType) : part.data;
+        const audioMime = mimeType.includes('mp3') ? 'audio/mp3' : 'audio/wav';
+
+        return Response.json({ audioContent, mimeType: audioMime });
       } catch (err) {
         return Response.json({ error: err.message }, { status: 500 });
       }
